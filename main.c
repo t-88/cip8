@@ -4,7 +4,7 @@
 
 #include "cip8.h"
 
-#define PRO_SIZE 4
+#define PRO_SIZE 8
 #define UNPACK_HEX(hex) ((hex & 0xFF000000) >> 8 * 3),\
                         ((hex & 0x00FF0000) >> 8 * 2),\
                         ((hex & 0x0000FF00) >> 8 * 1),\
@@ -15,26 +15,27 @@
 int main() {
 
 
+    // load  0
+    // draw  0
+    // cmp  v0 64
+
     OpCode program[PRO_SIZE] = {
-        0xF229,
-        0xD015,
-        0x00E0,
-        0x1201,
+            0xF029,
+            0xD015,
+            0x7004,
+            0x4040,
+            0x7105,
+            0x4040,
+            0x6000,
+            0x1202
     };
+
     Cip8 cip;
 
 
     cip8_init(&cip);    
     cip8_load_program(&cip,PRO_SIZE,program);
-
-    cip.regs.V[2] = 0x0C;
-    
-    cip.regs.V[0] = 0;
-    cip.regs.V[1] = 0;
-
-
-    // cip8_print_code(cip,0x201,PRO_SIZE);
-
+    Uint64 end ,start;
 #if RENDER_SDL
     SDL_Init(SDL_INIT_EVENTS);
     SDL_Event event;
@@ -46,16 +47,9 @@ int main() {
     
     SDL_Surface* display_surface = SDL_CreateRGBSurface(0,64,32,32,0,0,0,0);
     SDL_Texture* display_texture = SDL_CreateTextureFromSurface(renderer,display_surface);
-#endif
-
-#if RENDER_SDL
     bool done = false; 
-    Uint64 end = SDL_GetPerformanceCounter(),
-           start;
-    while (!done) {
-        start = SDL_GetPerformanceCounter();
 
-
+    while (!done) {       
         while(SDL_PollEvent(&event)) {
             if(event.type == SDL_QUIT) {
                 done = true;
@@ -64,44 +58,47 @@ int main() {
                 if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     done = true;
                 }
-                cip8_step(&cip);
             }
-        }
-
-
+        } 
+        start = SDL_GetPerformanceCounter();
+        cip8_step(&cip);
         if(cip.delay_timer > 0) {
             cip.delay_timer -= 1/60;
             cip.delay_timer = SDL_max(cip.delay_timer,0);
         }
-
-        // cip8_step(&cip);
+        cip8_step(&cip);
         if(cip.halted) {
             done = true;
         }        
-
-
-
-
-        
-
-
-#if RENDER_SDL
         SDL_SetRenderDrawColor(renderer,UNPACK_HEX(0x00000000));
         SDL_RenderClear(renderer);
         cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
         SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
         SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
         SDL_RenderPresent(renderer);
-#endif
         end = SDL_GetPerformanceCounter();
         float dt = ((end - start) / (float) SDL_GetPerformanceFrequency()) * 1000;
-        SDL_Delay(16.66666f - dt);
+        SDL_Delay(1/800.f * 1000  - dt);
     }
 #else
+    SDL_Init(SDL_INIT_TIMER);
+
     while (!cip.halted) {
+        start = SDL_GetPerformanceCounter();
+
         cip8_step(&cip);
         cip8_from_mem_to_terminal(cip);
-        getc(stdin);
+        if(cip.delay_timer > 0) {
+            cip.delay_timer -= 1/60;
+            cip.delay_timer = SDL_max(cip.delay_timer,0);
+        }
+
+        // getc(stdin);
+
+
+        end = SDL_GetPerformanceCounter();
+        float dt = ((end - start) / (float) SDL_GetPerformanceFrequency()) * 1000;
+        SDL_Delay(1/60 - dt);        
     }
     
 #endif

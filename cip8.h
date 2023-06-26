@@ -5,7 +5,7 @@
 #include <SDL2/SDL.h>
 
 
-#define ADDR_INST 0x201
+#define ADDR_INST 0x200
 #define MAX_EXCUTED_INST 20
 #define CURR_INST(cip) (cip->memory[cip->ip] << 8) | cip->memory[cip->ip + 1]
 #define GET_ADDR(addr)  (addr & 0x0F00)| (addr & 0x00FF) 
@@ -173,7 +173,7 @@ Inst cip8_get_inst(OpCode code) {
                 case 0xEE: inst.op = CALL;      break;                                          
                 case 0xE0: inst.op = CLD;      break;                                          
                 default:
-                    printf("op-code: 0x%X\n",code);
+                    printf("op-code: 0x%02X\n",code);
                     assert(0 && "Unreachable unknown op-code 0X__");
                 break;
             }
@@ -440,11 +440,11 @@ void cip8_execute(Cip8* cip,Inst inst) {
             int h = inst.oprand & 0x00F;
 
             for (size_t hi = 0; hi < h; hi++) {
-                uint8_t byte = cip->display_refresh[(y + hi) * 8 + x];
-                byte ^= cip->memory[cip->regs.I + hi];
-                cip->display_refresh[(y + hi) * 8 + x] = byte;
+                int y_pos = (y + hi) % 32;
+
+                uint8_t* byte = &cip->display_refresh[y_pos * 8];
+                *(byte + (int)(x / 8)) ^= cip->memory[cip->regs.I + hi] << x % 8;
             }
-            
         break;
         case SETISPR: 
         {
@@ -470,7 +470,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
 void cip8_step(Cip8* cip) {
     Inst inst = cip8_get_inst(CURR_INST(cip));
-    cip8_print_inst(*cip,inst);
+    // cip8_print_inst(*cip,inst);
     cip->ip += 2;
     cip8_execute(cip,inst);
 }
@@ -508,6 +508,7 @@ void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Textur
     SDL_UpdateTexture(texture,0,surface->pixels,surface->pitch);
 }
 void cip8_from_mem_to_terminal(const Cip8 cip) { 
+    printf("\033[2J\033[H");
     for (size_t y = 0; y < 32; y++) {
         for (size_t x = 0; x < 8; x++) {
             uint8_t byte = cip.display_refresh[x + y * 8];  
