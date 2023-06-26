@@ -10,6 +10,10 @@
 #define CURR_INST(cip) (cip->memory[cip->ip] << 8) | cip->memory[cip->ip + 1]
 #define GET_ADDR(addr)  (addr & 0x0F00)| (addr & 0x00FF) 
 
+
+#define BACKGROUND 0x000000
+#define FOREGROUND 0xFF00FF 
+
 // emulator memory:  [0x000,0x200], was avoided, now used to store font data
 // disaply refresh memory:       [0xF00,0xFFF], 64 * 32 display
 // call stack memeory    :       [0xEA0,0xEFF]
@@ -41,6 +45,7 @@ typedef struct  {
 
     bool blocked;
     bool halted;
+    bool display_changed;
 } Cip8;
 
 
@@ -139,7 +144,7 @@ void cip8_init(Cip8* cip) {
         cip->memory[3 * i+1] = chars[i].val[1];
         cip->memory[3 * i+2] = chars[i].val[2];
     }
-    
+    cip->display_changed = false;
 }
 void cip8_load_program(Cip8* cip, size_t size , OpCode* program) {
     size_t ip = ADDR_INST;
@@ -434,7 +439,8 @@ void cip8_execute(Cip8* cip,Inst inst) {
             }
         }
         break;
-        case DRW:        
+        case DRW:     
+            cip->display_changed = true;   
             int x = cip->regs.V[inst.oprand >> 8];
             int y = cip->regs.V[(inst.oprand >> 4) & 0x0F];
             int h = inst.oprand & 0x00F;
@@ -491,7 +497,7 @@ void cip8_clear_display(Cip8* cip) {
 }
 void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Texture* texture) {
     SDL_Rect rect = {0,0,1,1};
-    SDL_FillRect(surface,0,0x000000);
+    SDL_FillRect(surface,0,BACKGROUND);
     for (size_t y = 0; y < 32; y++) {
         for (size_t x = 0; x < 8; x++) {
             uint8_t byte = cip.display_refresh[x + y * 8];  
@@ -499,7 +505,7 @@ void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Textur
                 if(byte & (1 << b)) { 
                     rect.x = x * 8 + b;
                     rect.y = y;
-                    SDL_FillRect(surface,&rect,0xFFFFFF);
+                    SDL_FillRect(surface,&rect,FOREGROUND);
                 }
             }
         }

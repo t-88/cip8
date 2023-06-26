@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
@@ -11,6 +12,7 @@
                         ((hex & 0x000000FF) >> 8 * 0)
 
 #define RENDER_SDL 1
+#define FPS 2000.f
 
 int main() {
 
@@ -35,9 +37,14 @@ int main() {
 
     cip8_init(&cip);    
     cip8_load_program(&cip,PRO_SIZE,program);
-    Uint64 end ,start;
+    
+    Uint32 end ,start;
+    end = SDL_GetTicks();
+    start = end;
+    double delay = 0;
+
 #if RENDER_SDL
-    SDL_Init(SDL_INIT_EVENTS);
+    SDL_Init(SDL_INIT_VIDEO);
     SDL_Event event;
     SDL_Renderer* renderer;
     SDL_Window* window;
@@ -47,9 +54,20 @@ int main() {
     
     SDL_Surface* display_surface = SDL_CreateRGBSurface(0,64,32,32,0,0,0,0);
     SDL_Texture* display_texture = SDL_CreateTextureFromSurface(renderer,display_surface);
-    bool done = false; 
 
+    bool done = false; 
+    SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
     while (!done) {       
+        start = SDL_GetTicks();
+        delay = start - end; 
+        if(delay <= 1000/FPS) {
+            continue;
+        }
+
+        // printf("fps: %f\n",1000/delay);
+        end = start;
+
+
         while(SDL_PollEvent(&event)) {
             if(event.type == SDL_QUIT) {
                 done = true;
@@ -60,8 +78,8 @@ int main() {
                 }
             }
         } 
-        start = SDL_GetPerformanceCounter();
-        cip8_step(&cip);
+        
+        
         if(cip.delay_timer > 0) {
             cip.delay_timer -= 1/60;
             cip.delay_timer = SDL_max(cip.delay_timer,0);
@@ -70,22 +88,27 @@ int main() {
         if(cip.halted) {
             done = true;
         }        
-        SDL_SetRenderDrawColor(renderer,UNPACK_HEX(0x00000000));
-        SDL_RenderClear(renderer);
-        cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
-        SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
-        SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
-        SDL_RenderPresent(renderer);
-        end = SDL_GetPerformanceCounter();
-        float dt = ((end - start) / (float) SDL_GetPerformanceFrequency()) * 1000;
-        SDL_Delay(1/800.f * 1000  - dt);
+
+        // if(cip.display_changed) {
+            cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
+            SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
+            cip.display_changed = false;
+            SDL_RenderPresent(renderer);
+        // }
     }
 #else
     SDL_Init(SDL_INIT_TIMER);
 
     while (!cip.halted) {
-        start = SDL_GetPerformanceCounter();
+        start = SDL_GetTicks();
+        delay = start - end; 
+        if(delay <= 1000/FPS) {
+            continue;
+        }
 
+        end = start;
+
+        
         cip8_step(&cip);
         cip8_from_mem_to_terminal(cip);
         if(cip.delay_timer > 0) {
@@ -94,11 +117,6 @@ int main() {
         }
 
         // getc(stdin);
-
-
-        end = SDL_GetPerformanceCounter();
-        float dt = ((end - start) / (float) SDL_GetPerformanceFrequency()) * 1000;
-        SDL_Delay(1/60 - dt);        
     }
     
 #endif
