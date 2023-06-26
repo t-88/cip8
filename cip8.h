@@ -15,6 +15,8 @@
 #define FOREGROUND 0xFF00FF 
 #define MEMORY_SIZE 4096
 
+#define PRINT_INST false
+
 // emulator memory:  [0x000,0x200], was avoided, now used to store font data
 // disaply refresh memory:       [0xF00,0xFFF], 64 * 32 display
 // call stack memeory    :       [0xEA0,0xEFF]
@@ -158,9 +160,21 @@ void cip8_init(Cip8* cip) {
 }
 void cip8_load_program(Cip8* cip, size_t size , OpCode* program) {
     size_t ip = ADDR_INST;
-    for (size_t i = 0; i < size; i++) {
-        cip->memory[ip + 2 * i    ] = (program[i] & 0xFF00) >> 8;
-        cip->memory[ip + 2 * i + 1] = (program[i] & 0x00FF) >> 0;
+    
+
+    // check if little endian and load
+    int n = 1;
+    if(*(char*)(&n) == 1) {
+        for (size_t i = 0; i < size; i++) {
+            cip->memory[ip + 2 * i    ] = (program[i] & 0x00FF) >> 0;
+            cip->memory[ip + 2 * i + 1] = (program[i] & 0xFF00) >> 8;
+
+        }
+    } else {
+        for (size_t i = 0; i < size; i++) {
+            cip->memory[ip + 2 * i    ] = (program[i] & 0xFF00) >> 8;
+            cip->memory[ip + 2 * i + 1] = (program[i] & 0x00FF) >> 0;
+        }
     }
 }
 void cip8_clear_program(Cip8* cip,size_t size ) {
@@ -486,7 +500,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
 void cip8_step(Cip8* cip) {
     Inst inst = cip8_get_inst(CURR_INST(cip));
-    cip8_print_inst(*cip,inst);
+    if(PRINT_INST)  cip8_print_inst(*cip,inst);
     cip->ip += 2;
     cip8_execute(cip,inst);
 }

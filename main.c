@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
 
@@ -11,30 +12,69 @@
                         ((hex & 0x0000FF00) >> 8 * 1),\
                         ((hex & 0x000000FF) >> 8 * 0)
 
-#define RENDER_SDL 1
+#define RENDER_SDL 0
+#define RENDER_TERMINAL 0
 #define FPS 2000.f
 
+
+
+uint16_t* load_from_file(const char* file_name,int* size) {
+    FILE* f = fopen(file_name,"rb");
+
+    if(fseek(f,0,SEEK_END) == -1) {
+        fclose(f);
+        printf("[ERROR]: Could not read file\n");
+        exit(-1);
+    }
+
+    long fs = ftell(f);
+    int s = fs / 2;
+    
+    if(fseek(f,0,SEEK_SET) == -1) {
+        fclose(f);
+        
+        printf("[ERROR]: Could not read file\n");
+        exit(-2);
+    }
+
+    
+    uint16_t* buffer = malloc(s * sizeof(uint16_t));
+    if(fread(buffer,s,sizeof(uint16_t),f) == -1) {
+        fclose(f);
+        free(buffer);
+        exit(-3);
+    }
+    if(size != NULL) {
+        *size = s;
+    }
+    
+    fclose(f);
+    return buffer;
+}
+
 int main() {
-    OpCode program[PRO_SIZE] = {
-            0xD015,
-            0x7004,
-            0x4040,
-            0x7105,
-            0x4040,
-            0x6000,
-            0x1200
-    };
+    int prog_size;
+    uint16_t* program = load_from_file("output.ch8",&prog_size);
+    assert(prog_size > 0);
 
     Cip8 cip;
 
-
     cip8_init(&cip);    
-    cip8_load_program(&cip,PRO_SIZE,program);
+    cip8_load_program(&cip,prog_size,program);
+    free(program);
+
+
+    cip8_print_code(cip,0x200,prog_size);
+
     
     Uint32 end ,start;
     end = SDL_GetTicks();
     start = end;
     double delay = 0;
+
+    (void) delay;
+    (void) end;
+    (void) start;
 
 #if RENDER_SDL
     SDL_Init(SDL_INIT_VIDEO);
@@ -89,7 +129,7 @@ int main() {
             SDL_RenderPresent(renderer);
         }
     }
-#else
+#elif RENDER_TERMINAL
     SDL_Init(SDL_INIT_TIMER);
 
     while (!cip.halted) {
