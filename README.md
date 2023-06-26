@@ -4,6 +4,7 @@ like htf that i dont know about chip8 there is tons of resoures to making a emul
 
 ## Links
 [wiki page](https://en.wikipedia.org/wiki/CHIP-8)
+[tests](https://github.com/Timendus/chip8-test-suite#ibm-logo)
 
 
 ## How To Run

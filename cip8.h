@@ -12,10 +12,11 @@
 
 
 #define BACKGROUND 0x000000
-#define FOREGROUND 0xFF00FF 
+#define FOREGROUND 0x00FFFF
 #define MEMORY_SIZE 4096
+#define MAX_CYCLES -1
 
-#define PRINT_INST false
+#define PRINT_INST true
 
 // emulator memory:  [0x000,0x200], was avoided, now used to store font data
 // disaply refresh memory:       [0xF00,0xFFF], 64 * 32 display
@@ -273,6 +274,7 @@ Inst cip8_get_inst(OpCode code) {
 }
 void cip8_print_inst(Cip8 cip,Inst inst) {
     printf("0x%X     ",GET_ADDR(cip.ip));
+    printf("0x%02X%02X     ",cip.memory[cip.ip] ,cip.memory[cip.ip+1]);
     switch (inst.op)
     {
         case CLD:   printf("CLD\n");  break;
@@ -469,11 +471,27 @@ void cip8_execute(Cip8* cip,Inst inst) {
             int y = cip->regs.V[(inst.oprand >> 4) & 0x0F];
             int h = inst.oprand & 0x00F;
 
+
             for (size_t hi = 0; hi < h; hi++) {
                 int y_pos = (y + hi) % 32;
+                uint8_t a = cip->memory[cip->regs.I + hi];
+                uint8_t byte = 
+                                (( a >> 7)      << 0)  | 
+                                (((a >> 6) & 1) << 1)  |
+                                (((a >> 5) & 1) << 2)  |
+                                (((a >> 4) & 1) << 3)  |
+                                (((a >> 3) & 1) << 4)  |
+                                (((a >> 2) & 1) << 5)  |
+                                (((a >> 1) & 1) << 6)  |
+                                (((a >> 0) & 1) << 7);
 
-                uint8_t* byte = &cip->display_refresh[y_pos * 8];
-                *(byte + (int)(x / 8)) ^= cip->memory[cip->regs.I + hi] << x % 8;
+                if(x % 8 == 0) {
+                    cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= byte;
+                } else {
+                    printf("X = %X\n",x);
+                    cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= (byte << (x % 8));
+                    cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1] ^= (byte >> (8 - x % 8));
+                }
             }
         break;
         case SETISPR: 
@@ -500,7 +518,11 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
 void cip8_step(Cip8* cip) {
     Inst inst = cip8_get_inst(CURR_INST(cip));
-    if(PRINT_INST)  cip8_print_inst(*cip,inst);
+    if(PRINT_INST){ 
+        cip8_print_inst(*cip,inst);
+    }
+    
+
     cip->ip += 2;
     cip8_execute(cip,inst);
 }

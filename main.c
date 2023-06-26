@@ -12,9 +12,9 @@
                         ((hex & 0x0000FF00) >> 8 * 1),\
                         ((hex & 0x000000FF) >> 8 * 0)
 
-#define RENDER_SDL 0
+#define RENDER_SDL 1
 #define RENDER_TERMINAL 0
-#define FPS 2000.f
+#define FPS 60.f
 
 
 
@@ -54,7 +54,7 @@ uint16_t* load_from_file(const char* file_name,int* size) {
 
 int main() {
     int prog_size;
-    uint16_t* program = load_from_file("output.ch8",&prog_size);
+    uint16_t* program = load_from_file("tests/1-chip8-logo.ch8",&prog_size);
     assert(prog_size > 0);
 
     Cip8 cip;
@@ -64,7 +64,7 @@ int main() {
     free(program);
 
 
-    cip8_print_code(cip,0x200,prog_size);
+    // cip8_print_code(cip,0x200,prog_size);
 
     
     Uint32 end ,start;
@@ -90,15 +90,22 @@ int main() {
 
     bool done = false; 
     SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
-    while (!done) {       
+
+    int cycle = MAX_CYCLES;
+    while (!done) {
         start = SDL_GetTicks();
         delay = start - end; 
         if(delay <= 1000/FPS) {
             continue;
         }
 
+    
         // printf("fps: %f\n",1000/delay);
         end = start;
+
+
+
+
 
 
         while(SDL_PollEvent(&event)) {
@@ -122,12 +129,20 @@ int main() {
             done = true;
         }        
 
-        if(cip.display_changed) {
+        // if(cip.display_changed) {
             cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
             SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
             cip.display_changed = false;
             SDL_RenderPresent(renderer);
-        }
+        // }
+
+
+        if(MAX_CYCLES > 0) {
+            cycle -= 1;
+            if(cycle < 0) {
+                break;
+            }
+        }        
     }
 #elif RENDER_TERMINAL
     SDL_Init(SDL_INIT_TIMER);
@@ -153,7 +168,7 @@ int main() {
     }
     
 #endif
-
+    getc(stdin);
     cip8_clear_program(&cip,PRO_SIZE);
 
 #if RENDER_SDL
