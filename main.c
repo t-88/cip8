@@ -14,7 +14,7 @@
 
 #define RENDER_SDL 1
 #define RENDER_TERMINAL 0
-#define FPS 60.f
+#define FPS 300.f
 
 
 
@@ -54,7 +54,7 @@ uint16_t* load_from_file(const char* file_name,int* size) {
 
 int main() {
     int prog_size;
-    uint16_t* program = load_from_file("tests/3-corax+.ch8",&prog_size);
+    uint16_t* program = load_from_file("tests/4-flags.ch8",&prog_size);
     assert(prog_size > 0);
 
     Cip8 cip;

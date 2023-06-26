@@ -225,7 +225,7 @@ Inst cip8_get_inst(OpCode code) {
                 case 5:     inst.op = SUBC;  break;     
                 case 6:     inst.op = SHR;   break;           
                 case 7:     inst.op = SUBR;  break;            
-                case 0x0E:  inst.op = SHL;   break;                                                                                                                               
+                case 14:  inst.op = SHL;   break;                                                                                                                               
                 default: 
                     printf("op-code: 0x%X\n",code);
                     assert(0 && "Unreachable unknown op-code 8XX_");
@@ -387,24 +387,35 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case XOR: 
             cip->regs.V[(inst.oprand >> 8)] ^= cip->regs.V[(inst.oprand >> 4) & 0x0F]; 
         break;
-        case ADDC:
+        case ADDC: {
+            uint16_t r = cip->regs.V[(inst.oprand >> 8)] + cip->regs.V[(inst.oprand >> 4) & 0x0F];   
             cip->regs.V[(inst.oprand >> 8)] += cip->regs.V[(inst.oprand >> 4) & 0x0F]; 
+            cip->regs.V[0xF] = cip->regs.V[(inst.oprand >> 8)] != r;
+        }
         break;
-        case SUBC:
-            cip->regs.V[0x0F] = cip->regs.V[(inst.oprand >> 8)] < cip->regs.V[(inst.oprand >> 4) & 0x0F];
+        case SUBC: {
+            uint16_t r = cip->regs.V[(inst.oprand >> 8)] - cip->regs.V[(inst.oprand >> 4) & 0x0F];   
             cip->regs.V[(inst.oprand >> 8)] -= cip->regs.V[(inst.oprand >> 4) & 0x0F]; 
+            cip->regs.V[0xF] = cip->regs.V[(inst.oprand >> 8)] == r; 
+        }
         break;
-        case SHR: 
-            cip->regs.V[0x0F] = cip->regs.V[(inst.oprand >> 8)] & 0x1; 
-            cip->regs.V[(inst.oprand >> 8)] >>= 1; 
-        break;
-        case SUBR:
-            cip->regs.V[0x0F] = cip->regs.V[(inst.oprand >> 8)] > cip->regs.V[(inst.oprand >> 4) & 0x0F];
+        case SUBR: {
+            uint16_t r = cip->regs.V[(inst.oprand >> 4) & 0x0F] - cip->regs.V[(inst.oprand >> 8)];   
             cip->regs.V[(inst.oprand >> 8)] = cip->regs.V[(inst.oprand >> 4) & 0x0F] - cip->regs.V[(inst.oprand >> 8)]; 
+            cip->regs.V[0xF] = cip->regs.V[(inst.oprand >> 8)] == r; 
+        }
+        break;        
+        case SHR:   {
+            bool a = cip->regs.V[(inst.oprand >> 8)] & 0x1; 
+            cip->regs.V[(inst.oprand >> 8)] >>= 1; 
+            cip->regs.V[0xF] = a;
+        }
         break;
-        case SHL: 
-            cip->regs.V[0x0F] = cip->regs.V[(inst.oprand >> 8)] & 0x8; 
+        case SHL:  {
+            bool a = cip->regs.V[(inst.oprand >> 8)] & 0x80; 
             cip->regs.V[(inst.oprand >> 8)] <<= 1; 
+            cip->regs.V[0xF] = a;
+        }
         break;    
         case JVNEQ: {
             int a =  cip->regs.V[(inst.oprand >> 8)];
