@@ -200,7 +200,7 @@ Inst cip8_get_inst(OpCode code) {
     {
         case 0:
             switch (code & 0x00FF) {
-                case 0xEE: inst.op = CALL;      break;                                          
+                case 0xEE: inst.op = RET;      break;                                          
                 case 0xE0: inst.op = CLD;      break;                                          
                 default:
                     printf("op-code: 0x%02X\n",code);
@@ -209,7 +209,7 @@ Inst cip8_get_inst(OpCode code) {
             }
         break;
         case 1: inst.op = GOTO;     break;
-        case 2: inst.op = CALLS; break;
+        case 2: inst.op = CALLS;      break;
         case 3: inst.op = JEQ;      break;
         case 4: inst.op = JNEQ;     break;          
         case 5: inst.op = JVEQ;     break;
@@ -327,17 +327,25 @@ void cip8_execute(Cip8* cip,Inst inst) {
             cip8_clear_display(cip);
         break;  
         case RET: 
-            assert(0 && "Unimplemented RET inst");
+            cip->sp += 2;
+            cip->ip = (cip->call_stack[cip->sp - 1] << 4) | (cip->call_stack[cip->sp]);
+            printf("=================> ip: 0x%0X\n",cip->ip);
         break;  
+        case GOTO: 
+            cip->ip = inst.oprand;
+        break;   
         case CALLS: 
             assert((cip->sp > 0xEA0)&& "overflowing the stack");
-            cip->call_stack[cip->sp - 1]     = (cip->ip & 0x0F00) >> 8;
-            cip->call_stack[cip->sp]         = (cip->ip & 0x00FF);
+            cip->call_stack[cip->sp - 1]     = (cip->ip & 0xFF0) >> 4;
+            cip->call_stack[cip->sp]         = (cip->ip & 0xF);
+            cip->ip = inst.oprand;
+            printf("=================> ip: 0x%0X\n",(cip->call_stack[cip->sp - 1] << 4) | cip->call_stack[cip->sp]);
             cip->sp -= 2;
+
         break;     
         case JEQ: {
             int a =  cip->regs.V[(inst.oprand >> 8)];
-            int b =  (inst.oprand >> 8);
+            int b =  inst.oprand & 0xFF;
             if(a == b) {
                 cip->ip += 2; 
             }
@@ -365,9 +373,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case ADD:
             cip->regs.V[(inst.oprand >> 8)] += inst.oprand & 0x0FF; 
         break;        
-        case GOTO: 
-            cip->ip = inst.oprand;
-        break;
+
 
         case ASS: 
             cip->regs.V[(inst.oprand >> 8)] = cip->regs.V[(inst.oprand >> 4) & 0x0F]; 
@@ -445,7 +451,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case BCD: {
             int a =  cip->regs.V[(inst.oprand >> 8)];
             cip->memory[cip->regs.I + 0] = (int) a / 100;
-            cip->memory[cip->regs.I + 1] = (int) a / 10;
+            cip->memory[cip->regs.I + 1] = (int) (a % 100) / 10 ;
             cip->memory[cip->regs.I + 2] = (int) a % 10;
         }      
         break;
@@ -487,10 +493,19 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
                 if(x % 8 == 0) {
                     cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= byte;
+                    if(cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] != byte) {
+                        cip->regs.V[0xF] = 1;
+                    }
                 } else {
-                    printf("X = %X\n",x);
                     cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= (byte << (x % 8));
                     cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1] ^= (byte >> (8 - x % 8));
+                    
+                    // TODO: is this even right?
+                    if (((cip->display_refresh[y_pos * 8 + (int)(x / 8)] << (x % 8)) | 
+                    ((cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1]) >> (8 - x % 8))) != byte) {
+                        cip->regs.V[0xF] = 1;
+                    }
+
                 }
             }
         break;
