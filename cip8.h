@@ -50,6 +50,7 @@ typedef struct  {
     bool blocked;
     bool halted;
     bool display_changed;
+    bool waiting_realse
 } Cip8;
 
 
@@ -118,6 +119,7 @@ void cip8_init(Cip8* cip) {
     }
     cip->blocked = false;
     cip->halted = false;
+    cip->waiting_realse = false;
     
     // characters
     const Char chars[16] = {
@@ -429,9 +431,10 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case SETI:   cip->regs.I = inst.oprand;    break;
         case JMV0:   cip->ip     = cip->regs.V[0] + inst.oprand;    break;
         case RND:    cip->regs.V[(inst.oprand >> 8)] = rand() % (inst.oprand & 0x0FF);    break;
+
         case KEYD:
             if(cip->keyboard[cip->regs.V[(inst.oprand >> 8)]]) {
-                cip->ip += 2;;
+                cip->ip += 2;
             }       
         break;
         case KEYU:  
@@ -439,15 +442,26 @@ void cip8_execute(Cip8* cip,Inst inst) {
                 cip->ip += 2;;
             }       
         break;
+        case GETK:
+            cip->ip -= 2;
+            for (size_t i = 0; i < 16; i++) {
+                if(cip->keyboard[i]) {
+                    cip->regs.V[inst.oprand >> 8] = i;
+                    cip->waiting_realse = true;
+                    break;
+                }
+            }
+            
+            if(!cip->keyboard[cip->regs.V[(inst.oprand >> 8)]] && cip->waiting_realse) {
+                cip->ip += 2;
+                cip->waiting_realse = true;
+            }
+
+        break;
+
+
         case GETDT:
             cip->regs.V[(inst.oprand >> 8)] = (int) cip->delay_timer;
-        break;
-        case GETK:
-            cip->blocked = true;
-            cip->ip -= 2;
-            if(cip->keyboard[cip->regs.V[(inst.oprand >> 8)]]) {
-                cip->blocked = false;
-            }       
         break;
         
         case SETDT:      
