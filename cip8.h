@@ -9,8 +9,6 @@
 #define MAX_EXCUTED_INST 20
 #define CURR_INST(cip) (cip->memory[cip->ip] << 8) | cip->memory[cip->ip + 1]
 #define GET_ADDR(addr)  (addr & 0x0F00)| (addr & 0x00FF) 
-#define EXTRACT_OPRS(code)  code >> 8,code & 0x0FF
-
 
 // emulator memory:  [0x000,0x200], was avoided, now used to store font data
 // disaply refresh memory:       [0xF00,0xFFF], 64 * 32 display
@@ -42,6 +40,7 @@ typedef struct  {
 
 
     bool blocked;
+    bool halted;
 } Cip8;
 
 
@@ -50,7 +49,7 @@ typedef enum  {
     CLD, 
     RET,
     GOTO,
-    CALL_SUB,
+    CALLS,
     JVEQ, 
     JVNEQ, 
     JEQ,
@@ -88,6 +87,10 @@ typedef struct {
     Addr oprand;
 } Inst;
 
+typedef struct {
+    uint8_t val[3];
+} Char;
+
 
 void cip8_clear_display(Cip8*);
 
@@ -105,6 +108,38 @@ void cip8_init(Cip8* cip) {
         cip->memory[i] = 0;
     }
     cip->blocked = false;
+    cip->halted = false;
+    
+    // 1111
+    // 1000
+    // 1111
+    // 1001
+    // 1111
+    // characters
+    const Char chars[16] = {
+        (Char){.val = {0xF9,0x99,0xF0}}, // 0
+        (Char){.val = {0x46,0x44,0xE0}}, // 1
+        (Char){.val = {0xF8,0xF1,0xF0}}, // 2
+        (Char){.val = {0xF8,0xF8,0xF0}}, // 3
+        (Char){.val = {0x99,0xF8,0x80}}, // 4
+        (Char){.val = {0xF1,0xF8,0xF0}}, // 5
+        (Char){.val = {0xF1,0xF9,0xF0}}, // 6
+        (Char){.val = {0xF8,0xF8,0x80}}, // 7
+        (Char){.val = {0xF9,0xF9,0xF0}}, // 8
+        (Char){.val = {0xF9,0xF8,0xF0}}, // 9
+        (Char){.val = {0xF9,0xF9,0x90}}, // A
+        (Char){.val = {0x79,0xF9,0x70}}, // B
+        (Char){.val = {0xE1,0x11,0xE0}}, // C
+        (Char){.val = {0x79,0x99,0x70}}, // D
+        (Char){.val = {0xF1,0xF1,0xF0}}, // E
+        (Char){.val = {0xF1,0xF1,0x10}}, // F
+    };
+    for (size_t i = 0; i < 16; i++) {
+        cip->memory[3 * i]   = chars[i].val[0];
+        cip->memory[3 * i+1] = chars[i].val[1];
+        cip->memory[3 * i+2] = chars[i].val[2];
+    }
+    
 }
 void cip8_load_program(Cip8* cip, size_t size , OpCode* program) {
     size_t ip = ADDR_INST;
@@ -122,7 +157,7 @@ void cip8_clear_program(Cip8* cip,size_t size ) {
 }
 void cip8_print_code(const Cip8 cip, size_t start,size_t count) {
     for (size_t i = 0; i < count * 2; i+=2) {
-        printf("0x%X\n",  cip.memory[start + i] << 8 | cip.memory[start + i + 1]);
+        printf("0x%02X%02X\n",  cip.memory[start + i], cip.memory[start + i + 1]);
     }
 }
 
@@ -130,12 +165,13 @@ void cip8_print_code(const Cip8 cip, size_t start,size_t count) {
 Inst cip8_get_inst(OpCode code) {
     Inst inst;
     inst.oprand = code & 0x0FFF;
+
     switch ((code & 0xF000) >> (4 * 3))
     {
         case 0:
             switch (code & 0x00FF) {
-                case 0xEE: inst.op = KEYD;      break;                                          
-                case 0xE0: inst.op = KEYU;      break;                                          
+                case 0xEE: inst.op = CALL;      break;                                          
+                case 0xE0: inst.op = CLD;      break;                                          
                 default:
                     printf("op-code: 0x%X\n",code);
                     assert(0 && "Unreachable unknown op-code 0X__");
@@ -143,7 +179,7 @@ Inst cip8_get_inst(OpCode code) {
             }
         break;
         case 1: inst.op = GOTO;     break;
-        case 2: inst.op = CALL_SUB; break;
+        case 2: inst.op = CALLS; break;
         case 3: inst.op = JEQ;      break;
         case 4: inst.op = JNEQ;     break;          
         case 5: inst.op = JVEQ;     break;
@@ -188,7 +224,7 @@ Inst cip8_get_inst(OpCode code) {
                 case 0x15: inst.op = SETDT;      break;                                          
                 case 0x18: inst.op = SETST;      break;                                          
                 case 0x1E: inst.op = ADDI;      break;                                          
-                case 0x29: inst.op = SETISPR;      break;                                          
+                case 0x29: inst.op = SETISPR;    break;                                          
                 case 0x33: inst.op = BCD;      break;                                          
                 case 0x55: inst.op = DUMP;      break;                                          
                 case 0x65: inst.op = LOAD;      break;                                          
@@ -210,47 +246,50 @@ void cip8_print_inst(Cip8 cip,Inst inst) {
     printf("0x%X     ",GET_ADDR(cip.ip));
     switch (inst.op)
     {
-        case CLD:   printf("CLD\n");                                                        break;
-        case RET:   printf("RET\n");                                                        break; 
-        case CALL_SUB:  printf("CALL_SUB 0x%X\n",inst.oprand);                              break;         
-        case JEQ:   printf("JEQ V%X 0x%X \n",EXTRACT_OPRS(inst.oprand));                     break;         
-        case JNEQ:  printf("JNEQ V%X 0x%X\n",EXTRACT_OPRS(inst.oprand));                    break;    
-        case JVEQ:  printf("JVEQ V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);    break;   
-        case MOV:   printf("MOV V%X 0x%X\n",EXTRACT_OPRS(inst.oprand));                     break;    
-        case ADD:   printf("ADD V%X 0x%X\n",EXTRACT_OPRS(inst.oprand));                     break;    
-        case GOTO:  printf("GOTO  0x%X\n",inst.oprand);                                     break;       
-        case ASS:  printf("ASS  V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case OR:   printf("OR   V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case AND:  printf("AND  V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case XOR:  printf("XOR  V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case ADDC: printf("ADDC V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case SUBC: printf("SUBC V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case SHR:  printf("SHR  V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case SUBR: printf("SUBR V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;
-        case SHL:  printf("SHL  V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);     break;          
-        case JVNEQ:printf("JVNEQ V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break; 
+        case CLD:   printf("CLD\n");  break;
+        case RET:   printf("RET\n");  break; 
+        
+        case CALLS: printf("CALLS 0x%X\n",inst.oprand);  break;
+        case SETI:  printf("SETI  0x%X\n",inst.oprand);     break;
+        case JMV0:  printf("JMV0  0x%X\n",inst.oprand);     break;
+        case GOTO:  printf("GOTO  0x%X\n",inst.oprand);     break;       
 
-        case SETI:      printf("SETI  0x%X\n",inst.oprand);    break;
-        case JMV0:      printf("JMV0 0x%X\n",inst.oprand );     break;
-        case RND:       printf("RND V%X V%X\n",inst.oprand >> 8,inst.oprand  & 0x0FF);  break;
-        case DRW:       printf("DRW V%X V%X 0x%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F,(inst.oprand) & 0x0F);  break;
-        case KEYD:      printf("KEYD V%X\n",inst.oprand >> 8);     break;
-        case KEYU:      printf("KEYU V%X\n",inst.oprand >> 8);     break;
-        case BCD:       printf("BCD V%X \n",inst.oprand >> 8);   break;
-        case DUMP:      printf("DUMP V%X\n",inst.oprand >> 8);   break;
-        case LOAD:      printf("LOAD V%X\n",inst.oprand >> 8);   break;
-        case GETDT:     printf("GETDT V%X\n",inst.oprand >> 8);  break;
-        case GETK:      printf("GETK  V%X\n",inst.oprand >> 8);  break;
-        case SETDT:     printf("SETDT V%X\n",inst.oprand >> 8);  break;
-        case SETST:     printf("SETST V%X\n",inst.oprand >> 8);  break;
-        case ADDI:      printf("ADDI  V%X\n",inst.oprand >> 8);  break;
-        case SETISPR:   printf("SETISPR DONT UNDERSTAND YET\n"); break;  
+                                             
+        case JEQ:   printf("JEQ   V%X 0x%X \n",inst.oprand >> 8,inst.oprand & 0x0FF);  break;         
+        case JNEQ:  printf("JNEQ  V%X 0x%X\n",inst.oprand >> 8,inst.oprand & 0x0FF);  break;    
+        case MOV:   printf("MOV   V%X 0x%X\n", inst.oprand >> 8,inst.oprand & 0x0FF);  break;    
+        case ADD:   printf("ADD   V%X 0x%X\n", inst.oprand >> 8,inst.oprand & 0x0FF);  break;    
+        case RND:   printf("RND   V%X V%X\n",  inst.oprand >> 8,inst.oprand & 0x0FF);  break;
 
+        case JVEQ:  printf("JVEQ  V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;   
+        case ASS:   printf("ASS   V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case OR:    printf("OR    V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case AND:   printf("AND   V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case XOR:   printf("XOR   V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case ADDC:  printf("ADDC  V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case SUBC:  printf("SUBC  V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case SHR:   printf("SHR   V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case SUBR:  printf("SUBR  V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;
+        case SHL:   printf("SHL   V%X V%X\n", inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break;          
+        case JVNEQ: printf("JVNEQ V%X V%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F);  break; 
+
+        case KEYD:  printf("KEYD  V%X\n",inst.oprand >> 8);   break;
+        case KEYU:  printf("KEYU  V%X\n",inst.oprand >> 8);   break;
+        case BCD:   printf("BCD   V%X \n",inst.oprand >> 8);   break;
+        case DUMP:  printf("DUMP  V%X\n",inst.oprand >> 8);   break;
+        case LOAD:  printf("LOAD  V%X\n",inst.oprand >> 8);   break;
+        case GETDT: printf("GETDT V%X\n",inst.oprand >> 8);  break;
+        case GETK:  printf("GETK  V%X\n",inst.oprand >> 8);  break;
+        case SETDT: printf("SETDT V%X\n",inst.oprand >> 8);  break;
+        case SETST: printf("SETST V%X\n",inst.oprand >> 8);  break;
+        case ADDI:  printf("ADDI  V%X\n",inst.oprand >> 8);  break;
+        case SETISPR: printf("SETISPR V%X\n",inst.oprand >> 8); break;  
+
+        case DRW:   printf("DRW   V%X V%X 0x%X\n",inst.oprand >> 8,(inst.oprand >> 4) & 0x0F,(inst.oprand) & 0x0F);  break;
         default: assert(0 && "Unreachable unknown inst"); break;
     }
 }
 void cip8_execute(Cip8* cip,Inst inst) {
-    int a,b;
     switch (inst.op)
     {
         case CLD: 
@@ -259,32 +298,35 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case RET: 
             assert(0 && "Unimplemented RET inst");
         break;  
-        case CALL_SUB: 
+        case CALLS: 
             assert((cip->sp > 0xEA0)&& "overflowing the stack");
             cip->call_stack[cip->sp - 1]     = (cip->ip & 0x0F00) >> 8;
             cip->call_stack[cip->sp]         = (cip->ip & 0x00FF);
             cip->sp -= 2;
         break;     
-        case JEQ:
-            a =  cip->regs.V[(inst.oprand >> 8)];
-            b =  (inst.oprand >> 8);
+        case JEQ: {
+            int a =  cip->regs.V[(inst.oprand >> 8)];
+            int b =  (inst.oprand >> 8);
             if(a == b) {
                 cip->ip += 2; 
             }
+        }
         break;
-        case JNEQ:
-            a =  cip->regs.V[(inst.oprand >> 8)];
-            b =  (inst.oprand & 0x0FF);
+        case JNEQ: {
+            int a =  cip->regs.V[(inst.oprand >> 8)];
+            int b =  (inst.oprand & 0x0FF);
             if(a != b) {
                 cip->ip += 2; 
             }
+        }
         break;
-        case JVEQ:
-            a =  cip->regs.V[(inst.oprand >> 8)];
-            b =  cip->regs.V[(inst.oprand >> 4) & 0x0F];
+        case JVEQ: {
+            int a =  cip->regs.V[(inst.oprand >> 8)];
+            int b =  cip->regs.V[(inst.oprand >> 4) & 0x0F];
             if(a == b) {
                 cip->ip += 2; 
             }
+        }
         break;
         case MOV:
             cip->regs.V[(inst.oprand >> 8)] = inst.oprand & 0x0FF; 
@@ -327,12 +369,14 @@ void cip8_execute(Cip8* cip,Inst inst) {
             cip->regs.V[0x0F] = cip->regs.V[(inst.oprand >> 8)] & 0x8; 
             cip->regs.V[(inst.oprand >> 8)] <<= 1; 
         break;    
-        case JVNEQ:
-            a =  cip->regs.V[(inst.oprand >> 8)];
-            b =  cip->regs.V[(inst.oprand >> 4) & 0x0F];
+        case JVNEQ: {
+            int a =  cip->regs.V[(inst.oprand >> 8)];
+            int b =  cip->regs.V[(inst.oprand >> 4) & 0x0F];
             if(a != b) {
                 cip->ip += 2; 
             }
+
+        }
         break;
         case SETI:   cip->regs.I = inst.oprand;    break;
         case JMV0:   cip->ip     = cip->regs.V[0] + inst.oprand;    break;
@@ -367,11 +411,12 @@ void cip8_execute(Cip8* cip,Inst inst) {
         case ADDI:       
             cip->regs.I +=  cip->regs.V[(inst.oprand >> 8)];
         break;
-        case BCD:        
-            a =  cip->regs.V[(inst.oprand >> 8)];
+        case BCD: {
+            int a =  cip->regs.V[(inst.oprand >> 8)];
             cip->memory[cip->regs.I + 0] = (int) a / 100;
             cip->memory[cip->regs.I + 1] = (int) a / 10;
             cip->memory[cip->regs.I + 2] = (int) a % 10;
+        }      
         break;
         case DUMP: 
         {
@@ -391,18 +436,32 @@ void cip8_execute(Cip8* cip,Inst inst) {
         break;
         case DRW:        
             int x = cip->regs.V[inst.oprand >> 8];
-            int y = cip->regs.V[inst.oprand >> 4 & 0x0F];
-            int h = cip->regs.V[inst.oprand & 0x0F];
+            int y = cip->regs.V[(inst.oprand >> 4) & 0x0F];
+            int h = inst.oprand & 0x00F;
+
             for (size_t hi = 0; hi < h; hi++) {
-                uint8_t byte = cip->display_refresh[(y + hi) * 64 + 8 * x];
-                byte ^= (cip->memory[cip->regs.I + hi] << 8);
-                cip->display_refresh[(y + hi) * 64 + 8 * x] = byte;
+                uint8_t byte = cip->display_refresh[(y + hi) * 8 + x];
+                byte ^= cip->memory[cip->regs.I + hi];
+                cip->display_refresh[(y + hi) * 8 + x] = byte;
             }
             
         break;
-        case SETISPR:   printf("SETISPR DONT UNDERSTAND YET\n");                        break;  
+        case SETISPR: 
+        {
+            uint8_t x = cip->regs.V[inst.oprand >> 8];
+            assert(0 <= x && x <= 0xF && "Error: setting I to wrong character sprite");
 
+            cip->memory[3 * 17 + 0] = cip->memory[3 * x + 0] >> 4;
+            cip->memory[3 * 17 + 1] = cip->memory[3 * x + 0] & 0x0F;
 
+            cip->memory[3 * 17 + 2] = cip->memory[3 * x + 1] >> 4;
+            cip->memory[3 * 17 + 3] = cip->memory[3 * x + 1] & 0x0F;
+
+            cip->memory[3 * 17 + 4] = cip->memory[3 * x + 2] >> 4;
+            cip->memory[3 * 17 + 5] = cip->memory[3 * x + 2] & 0x0F;
+            cip->regs.I = 17 * 3; 
+        }                         
+        break;  
         default: assert(0 && "Unreachable unknown inst"); break;
     }
 
@@ -415,7 +474,6 @@ void cip8_step(Cip8* cip) {
     cip->ip += 2;
     cip8_execute(cip,inst);
 }
-
 void  cip8_run(Cip8* cip) {
     for (size_t i = 0; i < MAX_EXCUTED_INST; i++) {
         cip8_step(cip);        
@@ -427,13 +485,13 @@ void  cip8_run(Cip8* cip) {
 void cip8_clear_display(Cip8* cip) {
     for(size_t y = 0; y < 32; y++) {
         for(size_t x = 0; x < 8; x++) {
-            cip->display_refresh[x + y * 8] = 0;
+            cip->display_refresh[x + y * 8] = 0x00;
         }
     }
 }
-
 void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Texture* texture) {
     SDL_Rect rect = {0,0,1,1};
+    SDL_FillRect(surface,0,0x000000);
     for (size_t y = 0; y < 32; y++) {
         for (size_t x = 0; x < 8; x++) {
             uint8_t byte = cip.display_refresh[x + y * 8];  
@@ -448,6 +506,21 @@ void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Textur
     }
 
     SDL_UpdateTexture(texture,0,surface->pixels,surface->pitch);
+}
+void cip8_from_mem_to_terminal(const Cip8 cip) { 
+    for (size_t y = 0; y < 32; y++) {
+        for (size_t x = 0; x < 8; x++) {
+            uint8_t byte = cip.display_refresh[x + y * 8];  
+            for (size_t b = 0; b < 8; b++) {
+                if(byte & (1 << b)) {
+                    printf("#");
+                } else {
+                    printf(".");
+                }
+            }
+        }
+        printf("\n");
+    }
 }
 
 #endif

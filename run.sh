@@ -2,6 +2,6 @@
 
 set -e
 
-gcc main.c -o main -lSDL2
+gcc main.c -Wall -o main -lSDL2
 ./main
 rm main
