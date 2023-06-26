@@ -13,6 +13,7 @@
 
 #define BACKGROUND 0x000000
 #define FOREGROUND 0xFF00FF 
+#define MEMORY_SIZE 4096
 
 // emulator memory:  [0x000,0x200], was avoided, now used to store font data
 // disaply refresh memory:       [0xF00,0xFFF], 64 * 32 display
@@ -26,7 +27,7 @@ typedef uint16_t OpCode;
 
 
 typedef struct  {
-    uint8_t memory[4096];
+    uint8_t memory[MEMORY_SIZE];
     uint8_t* display_refresh;
     uint8_t* call_stack; 
 
@@ -109,17 +110,12 @@ void cip8_init(Cip8* cip) {
     for (size_t i = 0; i < 16; i++) {
         cip->keyboard[i] = 0;
     }
-    for (size_t i = 0; i < 0xFFF; i++) {
+    for (size_t i = 0; i < MEMORY_SIZE; i++) {
         cip->memory[i] = 0;
     }
     cip->blocked = false;
     cip->halted = false;
     
-    // 1111
-    // 1000
-    // 1111
-    // 1001
-    // 1111
     // characters
     const Char chars[16] = {
         (Char){.val = {0xF9,0x99,0xF0}}, // 0
@@ -141,9 +137,23 @@ void cip8_init(Cip8* cip) {
     };
     for (size_t i = 0; i < 16; i++) {
         cip->memory[3 * i]   = chars[i].val[0];
-        cip->memory[3 * i+1] = chars[i].val[1];
-        cip->memory[3 * i+2] = chars[i].val[2];
+        cip->memory[3 * i + 1] = chars[i].val[1];
+        cip->memory[3 * i + 2] = chars[i].val[2];
+
+
+        cip->regs.V[i] = 0;
     }
+
+    // pointing I to 0
+    cip->memory[3 * 17 + 0] = cip->memory[3 * 0 + 0] >> 4;
+    cip->memory[3 * 17 + 1] = cip->memory[3 * 0 + 0] & 0x0F;
+    cip->memory[3 * 17 + 2] = cip->memory[3 * 0 + 1] >> 4;
+    cip->memory[3 * 17 + 3] = cip->memory[3 * 0 + 1] & 0x0F;
+    cip->memory[3 * 17 + 4] = cip->memory[3 * 0 + 2] >> 4;
+    cip->memory[3 * 17 + 5] = cip->memory[3 * 0 + 2] & 0x0F;
+    cip->regs.I = 17 * 3;    
+
+
     cip->display_changed = false;
 }
 void cip8_load_program(Cip8* cip, size_t size , OpCode* program) {
@@ -476,7 +486,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
 void cip8_step(Cip8* cip) {
     Inst inst = cip8_get_inst(CURR_INST(cip));
-    // cip8_print_inst(*cip,inst);
+    cip8_print_inst(*cip,inst);
     cip->ip += 2;
     cip8_execute(cip,inst);
 }

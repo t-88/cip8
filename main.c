@@ -5,7 +5,7 @@
 
 #include "cip8.h"
 
-#define PRO_SIZE 8
+#define PRO_SIZE 7
 #define UNPACK_HEX(hex) ((hex & 0xFF000000) >> 8 * 3),\
                         ((hex & 0x00FF0000) >> 8 * 2),\
                         ((hex & 0x0000FF00) >> 8 * 1),\
@@ -15,21 +15,14 @@
 #define FPS 2000.f
 
 int main() {
-
-
-    // load  0
-    // draw  0
-    // cmp  v0 64
-
     OpCode program[PRO_SIZE] = {
-            0xF029,
             0xD015,
             0x7004,
             0x4040,
             0x7105,
             0x4040,
             0x6000,
-            0x1202
+            0x1200
     };
 
     Cip8 cip;
@@ -77,24 +70,24 @@ int main() {
                     done = true;
                 }
             }
+
         } 
-        
+        cip8_step(&cip);
         
         if(cip.delay_timer > 0) {
             cip.delay_timer -= 1/60;
             cip.delay_timer = SDL_max(cip.delay_timer,0);
         }
-        cip8_step(&cip);
         if(cip.halted) {
             done = true;
         }        
 
-        // if(cip.display_changed) {
+        if(cip.display_changed) {
             cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
             SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
             cip.display_changed = false;
             SDL_RenderPresent(renderer);
-        // }
+        }
     }
 #else
     SDL_Init(SDL_INIT_TIMER);
