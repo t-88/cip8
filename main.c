@@ -64,17 +64,10 @@ int main() {
     free(program);
 
 
-    // cip8_print_code(cip,0x200,prog_size);
-
-    
     Uint32 end ,start;
     end = SDL_GetTicks();
     start = end;
     double delay = 0;
-
-    (void) delay;
-    (void) end;
-    (void) start;
 
 #if RENDER_SDL
     SDL_Init(SDL_INIT_VIDEO);
@@ -91,7 +84,6 @@ int main() {
     bool done = false; 
     SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
 
-    int cycle = MAX_CYCLES;
     while (!done) {
         start = SDL_GetTicks();
         delay = start - end; 
@@ -111,44 +103,44 @@ int main() {
                 }
 
                 switch (event.key.keysym.scancode) {
-                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = event.key.keysym.scancode = 1;  break;
-                    case SDL_SCANCODE_A:cip.keyboard[10] = event.key.keysym.scancode = 1; break;
-                    case SDL_SCANCODE_B:cip.keyboard[11] = event.key.keysym.scancode = 1; break;
-                    case SDL_SCANCODE_C:cip.keyboard[12] = event.key.keysym.scancode = 1; break;
-                    case SDL_SCANCODE_D:cip.keyboard[13] = event.key.keysym.scancode = 1; break;
-                    case SDL_SCANCODE_E:cip.keyboard[14] = event.key.keysym.scancode = 1; break;
-                    case SDL_SCANCODE_F:cip.keyboard[15] = event.key.keysym.scancode = 1; break;
+                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = 1;  break;
+                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = 1;  break;
+                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = 1;  break;
+                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = 1;  break;
+                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = 1;  break;
+                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = 1;  break;
+                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = 1;  break;
+                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = 1;  break;
+                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = 1;  break;
+                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = 1;  break;
+                    case SDL_SCANCODE_A:cip.keyboard[10] =   1; break;
+                    case SDL_SCANCODE_B:cip.keyboard[11] =   1; break;
+                    case SDL_SCANCODE_C:cip.keyboard[12] =   1; break;
+                    case SDL_SCANCODE_D:cip.keyboard[13] =   1; break;
+                    case SDL_SCANCODE_E:cip.keyboard[14] =   1; break;
+                    case SDL_SCANCODE_F:cip.keyboard[15] =   1; break;
                     default: break;
 
                 }
             }
             if(event.type == SDL_KEYUP) {
                 switch (event.key.keysym.scancode) {
-                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = event.key.keysym.scancode = 0;  break;
-                    case SDL_SCANCODE_A:cip.keyboard[10] = event.key.keysym.scancode = 0; break;
-                    case SDL_SCANCODE_B:cip.keyboard[11] = event.key.keysym.scancode = 0; break;
-                    case SDL_SCANCODE_C:cip.keyboard[12] = event.key.keysym.scancode = 0; break;
-                    case SDL_SCANCODE_D:cip.keyboard[13] = event.key.keysym.scancode = 0; break;
-                    case SDL_SCANCODE_E:cip.keyboard[14] = event.key.keysym.scancode = 0; break;
-                    case SDL_SCANCODE_F:cip.keyboard[15] = event.key.keysym.scancode = 0; break;
+                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = 0;  break;
+                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = 0;  break;
+                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = 0;  break;
+                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = 0;  break;
+                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = 0;  break;
+                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = 0;  break;
+                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = 0;  break;
+                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = 0;  break;
+                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = 0;  break;
+                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = 0;  break;
+                    case SDL_SCANCODE_A:cip.keyboard[10] =   0; break;
+                    case SDL_SCANCODE_B:cip.keyboard[11] =   0; break;
+                    case SDL_SCANCODE_C:cip.keyboard[12] =   0; break;
+                    case SDL_SCANCODE_D:cip.keyboard[13] =   0; break;
+                    case SDL_SCANCODE_E:cip.keyboard[14] =   0; break;
+                    case SDL_SCANCODE_F:cip.keyboard[15] =   0; break;
                     default: break;
                 }
             }
@@ -172,13 +164,6 @@ int main() {
             SDL_RenderPresent(renderer);
         // }
 
-
-        if(MAX_CYCLES > 0) {
-            cycle -= 1;
-            if(cycle < 0) {
-                break;
-            }
-        }        
     }
 #elif RENDER_TERMINAL
     SDL_Init(SDL_INIT_TIMER);
@@ -205,7 +190,6 @@ int main() {
     
 #endif
     getc(stdin);
-    cip8_clear_program(&cip,PRO_SIZE);
 
 #if RENDER_SDL
     SDL_DestroyRenderer(renderer);
