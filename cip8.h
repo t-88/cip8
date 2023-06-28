@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-#define ENABLE_PRINT_DEBUG false
+#define ENABLE_PRINT_DEBUG true
 
 
 #define PROGRAM_START 0x200
@@ -100,7 +100,7 @@ typedef struct {
     uint16_t oprand;
 } Inst;
 typedef struct {
-    uint8_t val[3];
+    uint8_t val[5];
 } Char;
 
 void cip8_init(Cip8* cip); 
@@ -115,6 +115,7 @@ void cip8_clear_display(Cip8* cip);
 void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Texture* texture);
 void cip8_from_mem_to_terminal(const Cip8 cip); 
 void cip8_write_char(Cip8* cip, uint8_t i);
+OpCode* cip8_load_from_file(const char* file_name,int* size);
 
 
 void cip8_init(Cip8* cip) { 
@@ -131,47 +132,48 @@ void cip8_init(Cip8* cip) {
     cip->waiting_release = false;
     cip->display_changed = false;
 
-    
     const Char chars[16] = {
-        (Char){.val = {0xF9,0x99,0xF0}}, // 0
-        (Char){.val = {0x46,0x44,0xE0}}, // 1
-        (Char){.val = {0xF8,0xF1,0xF0}}, // 2
-        (Char){.val = {0xF8,0xF8,0xF0}}, // 3
-        (Char){.val = {0x99,0xF8,0x80}}, // 4
-        (Char){.val = {0xF1,0xF8,0xF0}}, // 5
-        (Char){.val = {0xF1,0xF9,0xF0}}, // 6
-        (Char){.val = {0xF8,0xF8,0x80}}, // 7
-        (Char){.val = {0xF9,0xF9,0xF0}}, // 8
-        (Char){.val = {0xF9,0xF8,0xF0}}, // 9
-        (Char){.val = {0xF9,0xF9,0x90}}, // A
-        (Char){.val = {0x79,0xF9,0x70}}, // B
-        (Char){.val = {0xE1,0x11,0xE0}}, // C
-        (Char){.val = {0x79,0x99,0x70}}, // D
-        (Char){.val = {0xF1,0xF1,0xF0}}, // E
-        (Char){.val = {0xF1,0xF1,0x10}}, // F
+        (Char){.val = {0xF0, 0x90, 0x90, 0x90, 0xF0}}, // 0
+        (Char){.val = {0x20, 0x60, 0x20, 0x20, 0x70}}, // 1
+        (Char){.val = {0xF0, 0x10, 0xF0, 0x80, 0xF0}}, // 2
+        (Char){.val = {0xF0, 0x10, 0xF0, 0x10, 0xF0}}, // 3
+        (Char){.val = {0x90, 0x90, 0xF0, 0x10, 0x10}}, // 4
+        (Char){.val = {0xF0, 0x80, 0xF0, 0x10, 0xF0}}, // 5
+        (Char){.val = {0xF0, 0x80, 0xF0, 0x90, 0xF0}}, // 6
+        (Char){.val = {0xF0, 0x10, 0x20, 0x40, 0x40}}, // 7
+        (Char){.val = {0xF0, 0x90, 0xF0, 0x90, 0xF0}}, // 8
+        (Char){.val = {0xF0, 0x90, 0xF0, 0x10, 0xF0}}, // 9
+        (Char){.val = {0xF0, 0x90, 0xF0, 0x90, 0x90}}, // A
+        (Char){.val = {0xE0, 0x90, 0xE0, 0x90, 0xE0}}, // B
+        (Char){.val = {0xF0, 0x80, 0x80, 0x80, 0xF0}}, // C
+        (Char){.val = {0xE0, 0x90, 0x90, 0x90, 0xE0}}, // D
+        (Char){.val = {0xF0, 0x80, 0xF0, 0x80, 0xF0}}, // E
+        (Char){.val = {0xF0, 0x80, 0xF0, 0x80, 0x80}}  // F
     };
+
+
     for (size_t i = 0; i < 16; i++) { 
         cip->keyboard[i] = 0; // Reset keyboard 
         cip->regs.V[i] = 0;  // Reset Regs
 
         // OP_LOAD Font
-        cip->memory[3 * i]   = chars[i].val[0];
-        cip->memory[3 * i + 1] = chars[i].val[1];
-        cip->memory[3 * i + 2] = chars[i].val[2];        
+        for (size_t j = 0; j < 5; j++) {
+            cip->memory[5 * i+j]   = chars[i].val[j];
+        }
+        
     }
 
 
-    cip8_write_char(cip,0);
+    cip8_write_char(cip,0xB);
 
 }
 
 // every time i draw a font, i OP_LOAD it to memory location OP_AND point I to it 
 void cip8_write_char(Cip8* cip, uint8_t i) { 
-    for (size_t j = 0; j < 3; j++) {
-        cip->memory[3 * 17 + j + 0] = cip->memory[3 * i + j] >> 4;
-        cip->memory[3 * 17 + j + 1] = cip->memory[3 * i + j] & 0x0F;
+    for (size_t j = 0; j < 5; j++) {
+        cip->memory[5 * 16 +  j] = cip->memory[5 * i + j];
     }
-    cip->regs.I = 17 * 3;    
+    cip->regs.I = 5 * 16;    
 }
 
 
@@ -477,7 +479,7 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
         case OP_DRW:     
             cip->display_changed = true;   
-            int x = cip->regs.V[inst.oprand >> 8];
+            int x = cip->regs.V[inst.oprand >> 8] % 64;
             int y = GET_VY(inst.oprand);
             int h = inst.oprand & 0x00F;
 
@@ -497,18 +499,18 @@ void cip8_execute(Cip8* cip,Inst inst) {
 
                 if(x % 8 == 0) {
                     cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= byte;
-                    if(cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] != byte) {
-                        cip->regs.V[0xF] = 1;
-                    }
+                    // if(cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] != byte) {
+                        // cip->regs.V[0xF] = 1;
+                    // }
                 } else {
                     cip->display_refresh[y_pos * 8 + (int)(x / 8)    ] ^= (byte << (x % 8));
                     cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1] ^= (byte >> (8 - x % 8));
                     
                     // TODO: is this even right?
-                    if (((cip->display_refresh[y_pos * 8 + (int)(x / 8)] << (x % 8)) | 
-                    ((cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1]) >> (8 - x % 8))) != byte) {
-                        cip->regs.V[0xF] = 1;
-                    }
+                    // if (((cip->display_refresh[y_pos * 8 + (int)(x / 8)] << (x % 8)) | 
+                    // ((cip->display_refresh[y_pos * 8 + (int)(x / 8) + 1]) >> (8 - x % 8))) != byte) {
+                    //     cip->regs.V[0xF] = 1;
+                    // }
 
                 }
             }
@@ -548,6 +550,8 @@ void cip8_clear_display(Cip8* cip) {
         }
     }
 }
+
+
 void cip8_sdl_from_mem_to_texture(const Cip8 cip,SDL_Surface* surface,SDL_Texture* texture) {
     SDL_Rect rect = {0,0,1,1};
     SDL_FillRect(surface,0,BACKGROUND);
@@ -581,6 +585,40 @@ void cip8_from_mem_to_terminal(const Cip8 cip) {
         }
         printf("\n");
     }
+}
+
+OpCode* cip8_load_from_file(const char* file_name,int* size) {
+    FILE* f = fopen(file_name,"rb");
+
+    if(fseek(f,0,SEEK_END) == -1) {
+        fclose(f);
+        printf("[ERROR]: Could not read file\n");
+        exit(-1);
+    }
+
+    long fs = ftell(f);
+    int s = fs / 2;
+    
+    if(fseek(f,0,SEEK_SET) == -1) {
+        fclose(f);
+        
+        printf("[ERROR]: Could not read file\n");
+        exit(-2);
+    }
+
+    
+    uint16_t* buffer = malloc(s * sizeof(uint16_t));
+    if(fread(buffer,s,sizeof(uint16_t),f) == -1) {
+        fclose(f);
+        free(buffer);
+        exit(-3);
+    }
+    if(size != NULL) {
+        *size = s;
+    }
+    
+    fclose(f);
+    return buffer;
 }
 
 #endif

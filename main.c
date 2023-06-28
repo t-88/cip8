@@ -7,69 +7,22 @@
 #include "cip8.h"
 
 #define PRO_SIZE 7
-#define UNPACK_HEX(hex) ((hex & 0xFF000000) >> 8 * 3),\
-                        ((hex & 0x00FF0000) >> 8 * 2),\
-                        ((hex & 0x0000FF00) >> 8 * 1),\
-                        ((hex & 0x000000FF) >> 8 * 0)
+
 
 #define RENDER_SDL 1
 #define RENDER_TERMINAL 0
-#define FPS 300.f
+#define FPS 60.f
 
 
-
-uint16_t* load_from_file(const char* file_name,int* size) {
-    FILE* f = fopen(file_name,"rb");
-
-    if(fseek(f,0,SEEK_END) == -1) {
-        fclose(f);
-        printf("[ERROR]: Could not read file\n");
-        exit(-1);
-    }
-
-    long fs = ftell(f);
-    int s = fs / 2;
-    
-    if(fseek(f,0,SEEK_SET) == -1) {
-        fclose(f);
-        
-        printf("[ERROR]: Could not read file\n");
-        exit(-2);
-    }
-
-    
-    uint16_t* buffer = malloc(s * sizeof(uint16_t));
-    if(fread(buffer,s,sizeof(uint16_t),f) == -1) {
-        fclose(f);
-        free(buffer);
-        exit(-3);
-    }
-    if(size != NULL) {
-        *size = s;
-    }
-    
-    fclose(f);
-    return buffer;
+bool limit_fps(int fps,Uint32 end,double* dt) {
+    Uint32 start = SDL_GetTicks();
+    *dt = start - end; 
+    // *dt /= 1000;
+    return *dt <= (1/(double)fps);
 }
 
-int main() {
-    int prog_size;
-    uint16_t* program = load_from_file("tests/6-keypad.ch8",&prog_size);
-    assert(prog_size > 0);
 
-    Cip8 cip;
-
-    cip8_init(&cip);    
-    cip8_load_program(&cip,prog_size,program);
-    free(program);
-
-
-    Uint32 end ,start;
-    end = SDL_GetTicks();
-    start = end;
-    double delay = 0;
-
-#if RENDER_SDL
+void renderer_sdl(Cip8* cip) {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Event event;
     SDL_Renderer* renderer;
@@ -83,17 +36,11 @@ int main() {
 
     bool done = false; 
     SDL_Rect rect = (SDL_Rect){.x = 0,.y = 0, .w = 64 * 10, .h = 32 * 10};
-
+    Uint32 end = SDL_GetTicks();
+    double dt = 0;  
     while (!done) {
-        start = SDL_GetTicks();
-        delay = start - end; 
-        if(delay <= 1000/FPS) {
-            continue;
-        }
-        // printf("fps: %f\n",1000/delay);
-        end = start;
 
-        while(SDL_PollEvent(&event)) {
+       while(SDL_PollEvent(&event)) {
             if(event.type == SDL_QUIT) {
                 done = true;
             }
@@ -103,98 +50,117 @@ int main() {
                 }
 
                 switch (event.key.keysym.scancode) {
-                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = 1;  break;
-                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = 1;  break;
-                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = 1;  break;
-                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = 1;  break;
-                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = 1;  break;
-                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = 1;  break;
-                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = 1;  break;
-                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = 1;  break;
-                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = 1;  break;
-                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = 1;  break;
-                    case SDL_SCANCODE_A:cip.keyboard[10] =   1; break;
-                    case SDL_SCANCODE_B:cip.keyboard[11] =   1; break;
-                    case SDL_SCANCODE_C:cip.keyboard[12] =   1; break;
-                    case SDL_SCANCODE_D:cip.keyboard[13] =   1; break;
-                    case SDL_SCANCODE_E:cip.keyboard[14] =   1; break;
-                    case SDL_SCANCODE_F:cip.keyboard[15] =   1; break;
+                    case SDL_SCANCODE_KP_0:cip->keyboard[0] = 1;  break;
+                    case SDL_SCANCODE_KP_1:cip->keyboard[1] = 1;  break;
+                    case SDL_SCANCODE_KP_2:cip->keyboard[2] = 1;  break;
+                    case SDL_SCANCODE_KP_3:cip->keyboard[3] = 1;  break;
+                    case SDL_SCANCODE_KP_4:cip->keyboard[4] = 1;  break;
+                    case SDL_SCANCODE_KP_5:cip->keyboard[5] = 1;  break;
+                    case SDL_SCANCODE_KP_6:cip->keyboard[6] = 1;  break;
+                    case SDL_SCANCODE_KP_7:cip->keyboard[7] = 1;  break;
+                    case SDL_SCANCODE_KP_8:cip->keyboard[8] = 1;  break;
+                    case SDL_SCANCODE_KP_9:cip->keyboard[9] = 1;  break;
+                    case SDL_SCANCODE_A:cip->keyboard[10] =   1; break;
+                    case SDL_SCANCODE_B:cip->keyboard[11] =   1; break;
+                    case SDL_SCANCODE_C:cip->keyboard[12] =   1; break;
+                    case SDL_SCANCODE_D:cip->keyboard[13] =   1; break;
+                    case SDL_SCANCODE_E:cip->keyboard[14] =   1; break;
+                    case SDL_SCANCODE_F:cip->keyboard[15] =   1; break;
                     default: break;
-
                 }
             }
             if(event.type == SDL_KEYUP) {
                 switch (event.key.keysym.scancode) {
-                    case SDL_SCANCODE_KP_0:cip.keyboard[0] = 0;  break;
-                    case SDL_SCANCODE_KP_1:cip.keyboard[1] = 0;  break;
-                    case SDL_SCANCODE_KP_2:cip.keyboard[2] = 0;  break;
-                    case SDL_SCANCODE_KP_3:cip.keyboard[3] = 0;  break;
-                    case SDL_SCANCODE_KP_4:cip.keyboard[4] = 0;  break;
-                    case SDL_SCANCODE_KP_5:cip.keyboard[5] = 0;  break;
-                    case SDL_SCANCODE_KP_6:cip.keyboard[6] = 0;  break;
-                    case SDL_SCANCODE_KP_7:cip.keyboard[7] = 0;  break;
-                    case SDL_SCANCODE_KP_8:cip.keyboard[8] = 0;  break;
-                    case SDL_SCANCODE_KP_9:cip.keyboard[9] = 0;  break;
-                    case SDL_SCANCODE_A:cip.keyboard[10] =   0; break;
-                    case SDL_SCANCODE_B:cip.keyboard[11] =   0; break;
-                    case SDL_SCANCODE_C:cip.keyboard[12] =   0; break;
-                    case SDL_SCANCODE_D:cip.keyboard[13] =   0; break;
-                    case SDL_SCANCODE_E:cip.keyboard[14] =   0; break;
-                    case SDL_SCANCODE_F:cip.keyboard[15] =   0; break;
+                    case SDL_SCANCODE_KP_0:cip->keyboard[0] = 0;  break;
+                    case SDL_SCANCODE_KP_1:cip->keyboard[1] = 0;  break;
+                    case SDL_SCANCODE_KP_2:cip->keyboard[2] = 0;  break;
+                    case SDL_SCANCODE_KP_3:cip->keyboard[3] = 0;  break;
+                    case SDL_SCANCODE_KP_4:cip->keyboard[4] = 0;  break;
+                    case SDL_SCANCODE_KP_5:cip->keyboard[5] = 0;  break;
+                    case SDL_SCANCODE_KP_6:cip->keyboard[6] = 0;  break;
+                    case SDL_SCANCODE_KP_7:cip->keyboard[7] = 0;  break;
+                    case SDL_SCANCODE_KP_8:cip->keyboard[8] = 0;  break;
+                    case SDL_SCANCODE_KP_9:cip->keyboard[9] = 0;  break;
+                    case SDL_SCANCODE_A:cip->keyboard[10] =   0; break;
+                    case SDL_SCANCODE_B:cip->keyboard[11] =   0; break;
+                    case SDL_SCANCODE_C:cip->keyboard[12] =   0; break;
+                    case SDL_SCANCODE_D:cip->keyboard[13] =   0; break;
+                    case SDL_SCANCODE_E:cip->keyboard[14] =   0; break;
+                    case SDL_SCANCODE_F:cip->keyboard[15] =   0; break;
                     default: break;
                 }
             }
 
-        } 
-        cip8_step(&cip);
-        
-        if(cip.delay_timer > 0) {
-            printf("delay: %f\n",cip.delay_timer);
-            cip.delay_timer -= 5;
-            cip.delay_timer = SDL_max(cip.delay_timer,0);
+        }         
+        if(limit_fps(FPS,end,&dt)) {
+            continue;
         }
-        if(cip.halted) {
+        end = SDL_GetTicks();
+        // printf("%f\n",dt);
+
+ 
+
+        cip8_step(cip);
+        if(cip->delay_timer > 0) {
+            cip->delay_timer -= dt;
+            cip->delay_timer = SDL_max(cip->delay_timer,0);
+        }
+        if(cip->halted) {
             done = true;
         }        
 
-        // if(cip.display_changed) {
-            cip8_sdl_from_mem_to_texture(cip,display_surface,display_texture);
+        if(cip->display_changed) {
+            cip8_sdl_from_mem_to_texture(*cip,display_surface,display_texture);
             SDL_RenderCopyEx(renderer,display_texture,0,&rect,0,0,0);
-            cip.display_changed = false;
+            cip->display_changed = false;
             SDL_RenderPresent(renderer);
-        // }
-
-    }
-#elif RENDER_TERMINAL
-    SDL_Init(SDL_INIT_TIMER);
-
-    while (!cip.halted) {
-        start = SDL_GetTicks();
-        delay = start - end; 
-        if(delay <= 1000/FPS) {
-            continue;
         }
 
-        end = start;
-
-        
-        cip8_step(&cip);
-        cip8_from_mem_to_terminal(cip);
-        if(cip.delay_timer > 0) {
-            cip.delay_timer -= 1/60;
-            cip.delay_timer = SDL_max(cip.delay_timer,0);
-        }
-
-        // getc(stdin);
     }
-    
-#endif
-    getc(stdin);
-
-#if RENDER_SDL
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-    SDL_Quit();
+}
+void renderer_terminal(Cip8* cip ) {
+    Uint32 end = SDL_GetTicks();
+    double dt = 0;    
+    SDL_Init(SDL_INIT_TIMER);
+    while (!cip->halted) {
+        if(limit_fps(FPS,end,&dt)) {
+            continue;
+        }
+        end = SDL_GetTicks();
+
+        cip8_step(cip);
+        cip8_from_mem_to_terminal(*cip);
+        if(cip->delay_timer > 0) {
+            cip->delay_timer -= 1/60;
+            cip->delay_timer = SDL_max(cip->delay_timer,0);
+        }
+    }
+}
+
+
+int main() {
+    int prog_size;
+    OpCode* program = cip8_load_from_file("tests/6-keypad.ch8",&prog_size);
+    
+    // OpCode program[] = {0x15D0, 0x0012}; 
+    // prog_size = 2;
+
+    assert(prog_size > 0);
+
+    Cip8 cip;
+    cip8_init(&cip);    
+
+    cip8_load_program(&cip,prog_size,program);
+    // free(program);
+
+#if RENDER_SDL
+    renderer_sdl(&cip);
+#elif RENDER_TERMINAL
+    renderer_terminal(&cip);
 #endif
+ 
+    SDL_Quit();
     return 0;
 }
